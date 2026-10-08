@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>《都是為了孩子》親師溝通模擬器</title>
+  <!-- 載入 React, ReactDOM 與 Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --primary: #4A90E2;
+      --primary-dark: #357ABD;
+      --secondary: #F39C12;
+      --secondary-dark: #E67E22;
+      --bg-color: #F9FAFB;
+      --card-bg: #FFFFFF;
+      --text-main: #333333;
+      --text-light: #666666;
+      --danger: #E74C3C;
+      --success: #2ECC71;
+      --border-radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+    }
+
+    #root {
+      width: 100%;
+      max-width: 600px;
+      min-height: 100vh;
+      background-color: var(--bg-color);
+      box-shadow: 0 0 20px rgba(0,0,0,0.05);
+      position: relative;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1 { color: var(--primary); font-size: 28px; margin-bottom: 8px; text-align: center; }
+    h2 { color: var(--text-light); font-size: 18px; font-weight: normal; margin-bottom: 24px; text-align: center; }
+    p { color: var(--text-main); line-height: 1.6; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .btn-primary { background-color: var(--primary); color: white; }
+    .btn-primary:hover { background-color: var(--primary-dark); }
+    .btn-secondary { background-color: var(--secondary); color: white; }
+    .btn-secondary:hover { background-color: var(--secondary-dark); }
+    .btn-outline { background-color: transparent; border: 2px solid var(--primary); color: var(--primary); }
+    .btn-option {
+      background-color: white; border: 2px solid #E5E7EB; color: var(--text-main); text-align: left;
+      line-height: 1.4; font-weight: normal;
+    }
+    .btn-option:hover:not(:disabled) { border-color: var(--primary); background-color: #F3F8FD; }
+    .btn-option:disabled { cursor: not-allowed; opacity: 0.6; }
+    .btn-option.selected { border-color: var(--primary); background-color: #EBF4FC; font-weight: bold; }
+
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      font-size: 14px;
+      color: var(--text-light);
+    }
+    .trust-bar-container {
+      width: 100%; height: 8px; background-color: #E5E7EB; border-radius: 4px; overflow: hidden; margin-bottom: 20px;
+    }
+    .trust-bar { height: 100%; transition: width 0.5s ease-in-out; }
+    .trust-bar.good { background-color: var(--success); }
+    .trust-bar.warn { background-color: var(--secondary); }
+    .trust-bar.danger { background-color: var(--danger); }
+
+    .scenario-card {
+      background-color: var(--card-bg); padding: 20px; border-radius: var(--border-radius);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; white-space: pre-line;
+    }
+    .timer { font-size: 24px; font-weight: bold; text-align: center; color: var(--danger); margin-bottom: 16px; }
+
+    .feedback-box {
+      background-color: var(--card-bg); padding: 20px; border-radius: var(--border-radius);
+      box-shadow: 0 -4px 10px rgba(0,0,0,0.1); margin-top: auto; animation: slideUp 0.3s ease-out;
+    }
+    .feedback-item { margin-bottom: 12px; font-size: 15px; }
+    .feedback-item.warn { color: #D35400; background: #FDF2E9; padding: 10px; border-radius: 8px; }
+    .feedback-item.better { color: #2C3E50; background: #EAF2F8; padding: 10px; border-radius: 8px; }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .debug-panel {
+      background: #333; color: lime; font-family: monospace; font-size: 12px;
+      padding: 8px; margin-bottom: 10px; border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const questions = [
+      // 教師版 10 題
+      {
+        id: 't1', role: 'teacher', category: '情緒處理',
+        scenario: '【晚上 7:42】\n家長訊息：「老師您好，孩子今天回家一直哭，說您在班上罵他，我想了解一下發生什麼事情。」',
+        explanation: '急於澄清事實會讓家長覺得你在防衛，或者暗示「是你孩子說謊/太脆弱」。',
+        betterResponse: '我理解您會擔心，我先了解今天的情況，再跟您說明。',
+        options: [
+          { text: '我沒有罵他，是他今天上課一直講話干擾別人，我只是提醒他。', score: -10, tag: '急於防衛', reaction: '家長覺得你在指責孩子，沒有同理孩子哭泣的情緒。' },
+          { text: '媽媽您好，我了解您很擔心。今天他情緒比較激動，我們明天通話聊聊好嗎？', score: 8, tag: '先接住情緒', reaction: '家長感覺情緒被接住，也願意等明天再談。' },
+          { text: '可能是孩子誤會了，我平常講話比較大聲。', score: 0, tag: '合理化', reaction: '家長可能半信半疑，雖然沒起衝突，但疑慮未消。' },
+          { text: '（已讀不回，想說明天到學校再處理）', score: -15, tag: '逃避溝通', reaction: '家長覺得被無視，焦慮感轉為憤怒。' }
+        ]
+      },
+      {
+        id: 't2', role: 'teacher', category: '公平性',
+        scenario: '家長：「為什麼某某同學沒寫作業可以下課，我家小明就要被留下來寫完？」',
+        explanation: '用「規定」或「別人的事」來擋，會讓家長覺得被敷衍，沒有針對他的孩子討論。',
+        betterResponse: '我明白您覺得標準好像不同。每個孩子的狀況與輔導方式不一樣，我們來談談目前小明寫作業遇到的困難。',
+        options: [
+          { text: '因為那個同學有特殊狀況，我不方便透露。', score: -8, tag: '引發猜忌', reaction: '家長覺得你在找藉口，或者覺得被排擠。' },
+          { text: '小明如果不留下來，他回家更不會寫，這也是為他好。', score: -5, tag: '單向說教', reaction: '家長覺得你在把責任推給孩子。' },
+          { text: '我了解您在意公平。因為每個孩子的學習目標不同，我的處置會稍微調整。針對小明的狀況，我們可以一起討論怎麼幫他。', score: 8, tag: '聚焦孩子', reaction: '家長感受到你的專業與用心，將焦點拉回孩子身上。' },
+          { text: '這是班級規定，我對大家都一樣。', score: -12, tag: '僵化規定', reaction: '家長覺得你在說謊，因為他明明看到不同標準。' }
+        ]
+      },
+      {
+        id: 't3', role: 'teacher', category: '信任危機',
+        scenario: '家長：「以前王老師帶的時候，班上成績都很好。為什麼換您帶之後，孩子成績退步這麼多？」',
+        explanation: '面對比較，不要攻擊前任老師，也不要急著怪家長不配合，這會引發對立。',
+        betterResponse: '成績退步確實會讓人擔心。這學期的課程難度有增加，我們一起來看看孩子在哪個單元卡住了。',
+        options: [
+          { text: '每個老師的教學風格本來就不一樣，不能這樣比。', score: -10, tag: '防衛反擊', reaction: '家長覺得你聽不進去建議。' },
+          { text: '這學期內容本來就比較難，您在家也要多督促他。', score: -8, tag: '推卸責任', reaction: '家長覺得你在推卸責任給家長。' },
+          { text: '看到成績退步您一定很著急。升上新宿段後，孩子的學習適應期較長，我們一起檢視他最近的學習狀況好嗎？', score: 8, tag: '建立合作', reaction: '家長覺得被理解，願意共同面對問題。' },
+          { text: '我會再調整我的教學方式，請您再觀察看看。', score: 2, tag: '過度妥協', reaction: '家長覺得你有誠意，但缺乏專業主導權。' }
+        ]
+      },
+      {
+        id: 't4', role: 'teacher', category: '界線設定',
+        scenario: '【晚上 11:30】\n家長瘋狂傳送 Line 訊息，詢問明天校外教學的集合時間與攜帶物品。',
+        explanation: '沒有界線的立即回應會讓你耗竭；但帶著情緒責備家長，會破壞信任。',
+        betterResponse: '（隔天早上）早安，理解您昨晚很焦急，集合時間是...（平靜回覆即可）。',
+        options: [
+          { text: '（立刻回覆所有細節，安撫家長）', score: 0, tag: '失去界線', reaction: '家長安心了，但未來可能會習慣深夜找你。' },
+          { text: '家長您好，現在已經很晚了，請您以後在下班時間前發問。', score: -10, tag: '生硬指責', reaction: '家長覺得你態度很兇，沒有人情味。' },
+          { text: '（開啟勿擾模式，隔天早上回覆）早安！昨晚休息了沒及時回覆。校外教學時間是...，祝今天順利！', score: 8, tag: '溫和堅定', reaction: '家長得到答案，也意識到自己昨晚太晚傳訊。' },
+          { text: '（隔天早上）通知單上都寫得很清楚，請您再仔細看一遍。', score: -12, tag: '不耐煩', reaction: '家長覺得被貶低，感到羞愧轉生氣。' }
+        ]
+      },
+      {
+        id: 't5', role: 'teacher', category: '衝突處理',
+        scenario: '家長：「我兒子說今天在學校被小強打！對方家長都不用出面道歉嗎？」',
+        explanation: '在釐清事實前，不要隨便答應「讓對方道歉」，也不要直接否定「打人」的事實。',
+        betterResponse: '聽到孩子受傷我很震驚。我先向兩邊孩子釐清詳細經過，下午打給您說明好嗎？',
+        options: [
+          { text: '小強平常不會打人，應該是兩個人在玩。', score: -15, tag: '偏袒', reaction: '家長大怒，覺得你偏袒小強。' },
+          { text: '我了解您非常生氣心疼。我目前正在釐清雙方的狀況，中午會給您一個完整的說明。', score: 8, tag: '中立承接', reaction: '家長覺得有被重視，願意給你時間處理。' },
+          { text: '好，我馬上打給小強媽媽請她跟您聯絡。', score: -8, tag: '草率處理', reaction: '未經釐清就引導雙方家長對質，可能引發更大衝突。' },
+          { text: '他們只是有小推擠，沒有「打」那麼嚴重啦。', score: -12, tag: '淡化感受', reaction: '家長覺得你大事化小，不重視他孩子的安全。' }
+        ]
+      },
+      {
+        id: 't6', role: 'teacher', category: '特殊要求',
+        scenario: '家長：「老師，我孩子體質比較弱，可以請您每天中午盯著他喝完溫水再午休嗎？」',
+        explanation: '直接拒絕會顯得無情，但全盤接受會造成班級管理困難。引導孩子自主是重點。',
+        betterResponse: '我知道您很關心孩子的健康。我們可以一起設計一個小表格，讓他練習自己記錄喝水。',
+        options: [
+          { text: '班上有30個學生，我真的沒辦法每天單獨盯他一個。', score: -10, tag: '直接拒絕', reaction: '家長覺得你冷漠，沒有愛心。' },
+          { text: '好的，我會盡量每天提醒他。', score: 2, tag: '含糊答應', reaction: '家長期待很高，哪天你忘了就會被責怪。' },
+          { text: '我了解您擔心他的身體。在學校我們可以慢慢培養他自我照顧的能力，我會先提醒他幾天，之後讓他自己練習好嗎？', score: 8, tag: '賦能引導', reaction: '家長覺得你既照顧孩子，又具備教育專業。' },
+          { text: '這應該是家長在家要訓練好的習慣喔。', score: -12, tag: '推回家庭', reaction: '家長覺得你在指責他教養不當。' }
+        ]
+      },
+      {
+        id: 't7', role: 'teacher', category: '群眾壓力',
+        scenario: '家長：「老師，這次運動會的表演服裝，我已經問過其他家長了，大家都覺得太貴。」',
+        explanation: '家長常會用「大家」來增加談判籌碼。不要陷入「到底是誰說的」的爭執。',
+        betterResponse: '謝謝您告訴我這個考量。服裝費用確實是個負擔，我們來討論有沒有更合適的替代方案。',
+        options: [
+          { text: '是哪些家長覺得貴？您可以請他們直接來找我。', score: -12, tag: '防衛對立', reaction: '家長覺得你在抓戰犯，氣氛變得緊張。' },
+          { text: '了解您的考量。費用的確是個重要的考量點，我會重新評估方案，再發問卷徵詢班上意見。', score: 8, tag: '公開透明', reaction: '家長覺得聲音被聽見，且處理方式公平。' },
+          { text: '可是這件衣服材質比較好，一生只有一次。', score: -5, tag: '價值觀綁架', reaction: '家長覺得你在情緒勒索。' },
+          { text: '好，那如果不想買的人可以不要買。', score: -8, tag: '負氣妥協', reaction: '家長覺得你態度消極，且會造成班級表演不一致。' }
+        ]
+      },
+      {
+        id: 't8', role: 'teacher', category: '威脅處理',
+        scenario: '家長：「如果這件事情不按我的方式處理，我就要向教育局反映！」',
+        explanation: '遇到威脅時，不要被激怒或恐嚇，保持專業冷靜，釐清對方的核心訴求。',
+        betterResponse: '我了解您現在非常不滿意。您可以行使您的權利，但我還是希望能先和您坐下來，確認我們有沒有溝通落差。',
+        options: [
+          { text: '您去反映啊，我又沒有做錯事。', score: -20, tag: '激化衝突', reaction: '家長覺得被挑釁，立刻打電話投訴。' },
+          { text: '拜託您不要這樣，我們有話好好說。', score: -5, tag: '過度低姿態', reaction: '家長覺得你心虛，反而氣焰更高。' },
+          { text: '聽得出來您對這個結果非常失望。我很希望能解決您的疑慮，我們能具體談談您覺得哪裡處理得不妥嗎？', score: 8, tag: '冷靜探詢', reaction: '家長情緒稍微降溫，因為你展現了對話的誠意。' },
+          { text: '學校有學校的規定，教育局來也是一樣的。', score: -10, tag: '官僚語氣', reaction: '家長覺得你態度傲慢，更加不滿。' }
+        ]
+      },
+      {
+        id: 't9', role: 'teacher', category: '後續追蹤',
+        scenario: '事情已經處理完了（孩子們已和好），但家長事後傳訊：「我還是覺得很嘔，為什麼錯的不是我們，卻要我們讓步？」',
+        explanation: '事情解決不代表「情緒解決」。此時需要的是心理支持，而不是重新翻案。',
+        betterResponse: '委屈您了。雖然事情告一段落，但我懂您心裡的不平。謝謝您這次的包容，這對孩子是很棒的示範。',
+        options: [
+          { text: '事情都已經圓滿落幕了，您就別再想了。', score: -8, tag: '否定情緒', reaction: '家長覺得你不懂他的委屈。' },
+          { text: '這不是讓步，這是教孩子寬容。', score: -5, tag: '說教', reaction: '家長覺得你在高高在上地指導他。' },
+          { text: '我能明白您的感受，看著孩子受委屈，做父母的確實很難受。這次真的很感謝您的體諒與大度。', score: 8, tag: '肯定付出', reaction: '家長覺得委屈被看見，情緒得到了釋放。' },
+          { text: '不然我再把對方家長找來談一次？', score: -10, tag: '重啟戰端', reaction: '家長覺得你搞不清楚狀況，只是想息事寧人。' }
+        ]
+      },
+      {
+        id: 't10', role: 'teacher', category: '體制爭議',
+        scenario: '家長：「老師都退休了，為什麼他可以這樣就退休？難道以前做錯事情都不用負責嗎？」',
+        explanation: '遊戲不做法律判斷。溝通重點是承接家長「正義未得伸張」的失落感，並將焦點轉回幫助現在的孩子。',
+        betterResponse: '我理解您會覺得事情沒有得到期待的結果，心裡很難接受。我們一起看看，現在還有哪些事情是能真正幫助孩子的。',
+        options: [
+          { text: '他已經退休了，我們也無能為力，這規定就是這樣。', score: -15, tag: '雙手一攤', reaction: '家長覺得學校在包庇、互踢皮球。' },
+          { text: '你這樣一直鬧下去，對孩子也沒有幫助。', score: -20, tag: '指責家長', reaction: '家長覺得受到二度傷害，極度憤怒。' },
+          { text: '我理解您覺得事情沒有得到妥善交代的失落感。目前體制上確實有其限制，但我們能一起討論，如何在班上給孩子更多的支持。', score: 8, tag: '同理與轉移', reaction: '家長感受到你與他站在一起，願意將焦點放回孩子身上。' },
+          { text: '我會把您的意見反映給上面知道。', score: 2, tag: '敷衍了事', reaction: '家長覺得這只是官方說法，不會有下文。' }
+        ]
+      },
+
+      // 家長版 10 題
+      {
+        id: 'p1', role: 'parent', category: '了解狀況',
+        scenario: '孩子回家悶悶不樂，說：「林老師今天一直針對我，別的同學講話都沒事，只有我被罰站。」',
+        explanation: '單憑孩子單方面說法直接質問老師，容易讓老師產生防衛心。',
+        betterResponse: '老師您好，孩子今天回家提到被罰站的事，心情很低落。我想了解一下當時的狀況，看在家能怎麼配合。',
+        options: [
+          { text: '老師您好，為什麼您今天只處罰我家小孩？聽說別的同學也有講話。', score: -12, tag: '預設立場', reaction: '老師覺得你在質問與指責，預設了老師不公平。' },
+          { text: '老師您好，孩子今天回家心情低落，提到被罰站的事。我想了解一下當時的狀況，有什麼需要我們在家配合的嗎？', score: 8, tag: '表達合作', reaction: '老師覺得你是來合作的，會更願意說明實情。' },
+          { text: '老師，我家孩子很敏感，可以請您以後不要針對他嗎？', score: -18, tag: '貼標籤', reaction: '老師覺得被扣上「針對」的帽子，溝通瞬間卡死。' },
+          { text: '（跟孩子說：一定是你自己做錯事，明天去跟老師道歉）', score: -5, tag: '未審先判', reaction: '錯失了與學校釐清真相的機會，孩子也覺得你不挺他。' }
+        ]
+      },
+      {
+        id: 'p2', role: 'parent', category: '課業疑慮',
+        scenario: '你發現老師最近出了一份很難的專題作業，孩子每天熬夜寫不完。你想跟老師反映。',
+        explanation: '避免一開口就批評作業沒意義或太多，先肯定老師的用心，再表達孩子的困難。',
+        betterResponse: '老師好，感謝您用心設計專題。但孩子最近因為進度熬夜，想跟您討論是否有調整空間。',
+        options: [
+          { text: '老師，這作業太難了吧？連我們大人都不會寫。', score: -10, tag: '直接批評', reaction: '老師覺得專業被質疑。' },
+          { text: '老師您好，看到您用心設計的專題。但孩子最近為此熬夜，壓力很大，想請教您是否有建議的完成方式？', score: 8, tag: '求助視角', reaction: '老師感受到尊重，會願意提供鷹架或彈性。' },
+          { text: '如果作業寫不完，我們明天可以請假嗎？', score: -8, tag: '消極逃避', reaction: '老師覺得你在幫孩子逃避責任。' },
+          { text: '我直接幫孩子做完交差就好。', score: -12, tag: '剝奪學習', reaction: '老師會看出是家長做的，對雙方信任大打折扣。' }
+        ]
+      },
+      {
+        id: 'p3', role: 'parent', category: '班級比較',
+        scenario: '安親班老師告訴你，隔壁班都沒有這麼多考試，只有你們班每天都在考。',
+        explanation: '拿別人來比較是溝通大忌，會激起對方的防衛本能。',
+        betterResponse: '老師好，發現孩子最近對考試比較焦慮，想了解目前的評量規劃，我們在家能怎麼協助？',
+        options: [
+          { text: '為什麼隔壁班都不用考這麼多？', score: -12, tag: '拿人比較', reaction: '老師心想：「那你轉去隔壁班啊。」' },
+          { text: '老師，聽說我們班考試特別多，這樣會不會扼殺孩子的學習興趣？', score: -8, tag: '過度推論', reaction: '老師覺得你在指導他怎麼教學。' },
+          { text: '老師您好，孩子最近準備考試有些吃力。想請教老師，這學期的評量規劃大概是怎樣的，我們在家好配合複習。', score: 8, tag: '了解脈絡', reaction: '老師願意分享他的教學理念與規劃。' },
+          { text: '（直接打給校長反映該班考試太多）', score: -20, tag: '越級溝通', reaction: '老師覺得不被尊重，親師關係徹底破裂。' }
+        ]
+      },
+      {
+        id: 'p4', role: 'parent', category: '焦慮等待',
+        scenario: '【晚上 10:00】\n你發現孩子明天要帶水彩用具但沒帶回來，你很焦慮，傳訊息給老師。',
+        explanation: '體諒老師的休息時間。如果是自己的突發狀況，態度應保持柔軟，而非要求老師解決。',
+        betterResponse: '老師抱歉晚打擾了。孩子忘了帶用具，我們明天會盡量補齊，若有缺漏再麻煩老師見諒。',
+        options: [
+          { text: '老師在嗎？急！小孩水彩沒帶回來，明天怎麼辦？', score: -10, tag: '情緒轉嫁', reaction: '老師覺得你在把焦慮丟給他。' },
+          { text: '老師抱歉這麼晚傳訊。孩子忘了帶用具，這則訊息不用回覆，只是先讓老師知道，明天我們可能會有缺漏，請見諒。', score: 8, tag: '承擔責任', reaction: '老師覺得你很明理，明天會體諒孩子。' },
+          { text: '老師，以後可以麻煩您放學前提醒全班帶東西嗎？', score: -15, tag: '推卸責任', reaction: '老師覺得明明是小孩忘記，卻怪到老師頭上。' },
+          { text: '（狂打 Line 語音電話直到老師接）', score: -20, tag: '侵犯界線', reaction: '老師感到極度被冒犯。' }
+        ]
+      },
+      {
+        id: 'p5', role: 'parent', category: '孩子抱怨',
+        scenario: '孩子說：「老師今天上課一直罵人，我很害怕不想去上學。」',
+        explanation: '先同理孩子的害怕，再去向老師求證，而非帶著定罪的心態去質問。',
+        betterResponse: '老師好，孩子提到今天班上氣氛比較嚴肅，他有些害怕。想了解一下狀況，以便安撫他。',
+        options: [
+          { text: '老師，請問您今天是不是情緒失控罵小孩？', score: -15, tag: '定罪', reaction: '老師覺得被攻擊，開啟防衛模式。' },
+          { text: '老師您好，孩子今天回家說有些害怕去學校，提到班上氣氛比較嚴肅。想請教今天有發生什麼事嗎？我好知道怎麼安撫他。', score: 8, tag: '提供資訊', reaction: '老師了解孩子反應，會說明實情並調整。' },
+          { text: '如果您壓力很大，不適合當老師就不要當。', score: -20, tag: '人身攻擊', reaction: '親師關係徹底毀滅。' },
+          { text: '你不要理老師就好了，當他在發瘋。', score: -10, tag: '破壞權威', reaction: '孩子以後在學校會更加難以管教。' }
+        ]
+      },
+      {
+        id: 'p6', role: 'parent', category: '同儕衝突',
+        scenario: '你的孩子被同學不小心撞到，眼鏡破了。老師通知你此事。',
+        explanation: '意外發生時，重點在於後續處理與安全，而非立刻追求懲罰。',
+        betterResponse: '謝謝老師通知。孩子有受傷嗎？之後可能需要討論一下賠償與安全宣導的事宜。',
+        options: [
+          { text: '叫對方家長立刻來學校！', score: -12, tag: '意氣用事', reaction: '老師覺得難以溝通，場面容易失控。' },
+          { text: '謝謝老師第一時間通知。人沒受傷最重要，稍晚我過去了解狀況，再麻煩老師協助我們雙方溝通。', score: 8, tag: '理性應對', reaction: '老師鬆了一口氣，會更積極協助你處理。' },
+          { text: '老師你怎麼顧的？在教室也能撞破眼鏡？', score: -15, tag: '究責老師', reaction: '老師覺得委屈，因為下課意外難以百分百預防。' },
+          { text: '沒關係啦，小孩子玩鬧難免。', score: 0, tag: '過度妥協', reaction: '老師感謝你的包容，但如果對方家長沒道歉，你事後可能會後悔。' }
+        ]
+      },
+      {
+        id: 'p7', role: 'parent', category: '尋求資源',
+        scenario: '孩子最近有嚴重的拒學傾向，每天早上都在門口哭。你想跟老師談談。',
+        explanation: '拒學是系統性問題，需要親師生共同合作，坦誠目前的困難是第一步。',
+        betterResponse: '老師，孩子最近上學意願很低。我們在家試過了一些方法但效果不好，想尋求學校的建議與協助。',
+        options: [
+          { text: '他在家都很正常，是不是在學校遇到什麼事你們沒說？', score: -12, tag: '懷疑學校', reaction: '老師覺得你在暗示學校隱瞞霸凌。' },
+          { text: '老師，孩子最近拒學狀況嚴重，我們感到很無力。不知道輔導室有沒有資源，或者我們能怎麼配合學校？', score: 8, tag: '尋求合作', reaction: '老師感受到你的誠意，會立即啟動校內資源協助。' },
+          { text: '老師可以麻煩你每天早上到校門口親自接他嗎？', score: -8, tag: '不合理要求', reaction: '老師覺得壓力太大，難以長期配合。' },
+          { text: '（幫孩子請假一週，什麼都不說）', score: -10, tag: '逃避問題', reaction: '老師無法掌握狀況，錯失介入黃金期。' }
+        ]
+      },
+      {
+        id: 'p8', role: 'parent', category: '溝通落差',
+        scenario: '你反映了問題，老師也解釋了處理過程，但你心裡還是覺得「老師的態度很敷衍」。',
+        explanation: '如果感受不好，可以溫和地表達「感受」，而不是指責對方「態度差」。',
+        betterResponse: '謝謝老師的說明。可能因為文字訊息比較簡短，我剛才還是有點擔心。聽您這樣說我就比較清楚了。',
+        options: [
+          { text: '我覺得你根本沒有用心在處理這件事。', score: -15, tag: '否定努力', reaction: '老師覺得心寒，認為做再多也沒用。' },
+          { text: '謝謝老師的說明。不過這件事對孩子影響滿大的，我還是有點擔心，我們能再觀察一週看看嗎？', score: 8, tag: '表達擔憂', reaction: '老師理解你的不安，同意繼續追蹤。' },
+          { text: '算了，跟你講也沒用。', score: -12, tag: '情緒勒索', reaction: '對話終止，留下芥蒂。' },
+          { text: '（把老師的回覆截圖發到家長群組公審）', score: -20, tag: '公開公審', reaction: '造成無法挽回的對立與法律問題。' }
+        ]
+      },
+      {
+        id: 'p9', role: 'parent', category: '面對規定',
+        scenario: '老師表示：「依據學校規定，孩子帶手機來學校違規，要代管一週。」你覺得一週太久了。',
+        explanation: '尊重規定是前提，如果有困難，應該是提出「特殊需求」而非「挑戰規定」。',
+        betterResponse: '了解這是學校規定。但因為週末有特殊行程需要聯絡，不知是否能彈性先領回，週一再帶來代管？',
+        options: [
+          { text: '這什麼不合理的規定？手機是我的財產，你沒權利扣留。', score: -15, tag: '挑戰底線', reaction: '老師為了維護班級常規，必須跟你硬碰硬。' },
+          { text: '老師，了解這是校規。但因為週末孩子要自己搭車去阿嬤家，有安全考量，不知能否週五先領回，週一再繳回代管？', score: 8, tag: '提出困難', reaction: '老師看到合理的需求，通常願意給予彈性。' },
+          { text: '我就讓他帶，大不了再被抓到啊。', score: -12, tag: '破壞規則', reaction: '教導孩子不用遵守規則，老師也會感到無奈。' },
+          { text: '（立刻買一支新手機給孩子帶去）', score: -8, tag: '物質溺愛', reaction: '老師覺得教育理念差異太大。' }
+        ]
+      },
+      {
+        id: 'p10', role: 'parent', category: '追究到底',
+        scenario: '學校告知某位老師的不當行為已處理完畢，但你覺得那位老師根本沒受處罰，你想繼續追究。',
+        explanation: '遊戲不做法律判斷。家長關心的是孩子的安全與公平，將焦點放在「預防與支持」會比「無止盡究責」更有建設性。',
+        betterResponse: '我了解學校有處理流程。但我最在意的，是未來如何確保孩子在班上的心理安全，我們能具體討論這部分嗎？',
+        options: [
+          { text: '所以你們就是官官相護嘛！他都沒事，我小孩白受委屈了？', score: -15, tag: '情緒謾罵', reaction: '學校防衛心升起，溝通變成意氣之爭。' },
+          { text: '如果他不出來公開道歉，我就去找媒體！', score: -15, tag: '訴諸威脅', reaction: '學校進入危機處理模式，無法真心對話。' },
+          { text: '我理解學校有行政流程的限制。但我心裡還是很難接受。我最在意的是未來如何確保孩子的安全，我們可以談談後續的保護機制嗎？', score: 8, tag: '聚焦未來', reaction: '學校理解你的委屈，也更願意在實質上保護孩子。' },
+          { text: '（算了，反正學校都這樣，叫孩子自己小心點）', score: -5, tag: '習得性無助', reaction: '雖然沒衝突，但沒有建立起安全網。' }
+        ]
+      }
+    ];
+
+    function App() {
+      const [gameState, setGameState] = useState('home');
+      const [role, setRole] = useState('');
+      const [currentQIndex, setCurrentQIndex] = useState(0);
+      const [trustScore, setTrustScore] = useState(70);
+      const [timeLeft, setTimeLeft] = useState(15);
+      const [selectedOption, setSelectedOption] = useState(null);
+      const [history, setHistory] = useState([]);
+      
+      const isDebug = new URLSearchParams(window.location.search).get('debug') === 'true';
+
+      const roleQuestions = questions.filter(q => q.role === role);
+      const currentQ = roleQuestions[currentQIndex];
+
+      useEffect(() => {
+        if (gameState === 'playing' && !selectedOption && timeLeft > 0) {
+          const timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000);
+          return () => clearTimeout(timer);
+        } else if (gameState === 'playing' && timeLeft === 0 && !selectedOption) {
+          handleTimeOut();
+        }
+      }, [timeLeft, gameState, selectedOption]);
+
+      const startGame = (selectedRole) => {
+        setRole(selectedRole);
+        setGameState('intro');
+      };
+
+      const beginPlaying = () => {
+        setGameState('playing');
+        setCurrentQIndex(0);
+        setTrustScore(70);
+        setHistory([]);
+        resetTurn();
+      };
+
+      const resetTurn = () => {
+        setSelectedOption(null);
+        setTimeLeft(15);
+      };
+
+      const handleOptionClick = (option) => {
+        if (selectedOption) return;
+        setSelectedOption(option);
+        
+        const newScore = Math.min(100, Math.max(0, trustScore + option.score));
+        setTrustScore(newScore);
+        setHistory(prev => [...prev, { question: currentQ, option }]);
+      };
+
+      const handleTimeOut = () => {
+        const timeoutOption = { 
+          text: "（未及時回應）", 
+          score: -5, 
+          tag: "失去溝通時機",
+          reaction: "對方覺得被忽視，溝通陷入僵局。" 
+        };
+        handleOptionClick(timeoutOption);
+      };
+
+      const nextQuestion = () => {
+        if (currentQIndex < roleQuestions.length - 1) {
+          setCurrentQIndex(prev => prev + 1);
+          resetTurn();
+        } else {
+          setGameState('result');
+        }
+      };
+
+      const getEnding = (score) => {
+        if (score >= 90) return { title: '🤝 默契建立', desc: '你很能讓對方感受到被理解，溝通容易往下走。' };
+        if (score >= 75) return { title: '😊 順利溝通', desc: '整體溝通穩定，偶爾有一些可以再調整的地方。' };
+        if (score >= 55) return { title: '😐 還有一點距離', desc: '你的意思可能沒有完全被對方接住。' };
+        if (score >= 30) return { title: '⚠️ 誤會升高', desc: '幾個關鍵說法讓對方開始產生防衛。' };
+        return { title: '💥 溝通卡關', desc: '你可能沒有惡意，但雙方已經很難聽見彼此真正想說的話。' };
+      };
+
+      if (gameState === 'home') {
+        return (
+          <div className="container" style={{ justifyContent: 'center' }}>
+            <h1>《都是為了孩子》</h1>
+            <h2>溫爸溫媽 × 林老師<br/>親師溝通雙視角模擬器</h2>
+            <div className="scenario-card" style={{ textAlign: 'center' }}>
+              <p>「同一個孩子，不同的位置。<br/>你以為你在溝通，對方可能正在解讀另一件事。」</p>
+            </div>
+            <button className="btn btn-primary" onClick={() => startGame('teacher')}>我是林老師 (扮演教師)</button>
+            <button className="btn btn-secondary" onClick={() => startGame('parent')}>我是溫爸／溫媽 (扮演家長)</button>
+            <p style={{ textAlign: 'center', color: '#666', marginTop: '20px', fontSize: '14px' }}>
+              10 題、每題 15 秒。<br/>沒有標準答案，只有不同的溝通結果。
+            </p>
+          </div>
+        );
+      }
+
+      if (gameState === 'intro') {
+        return (
+          <div className="container" style={{ justifyContent: 'center' }}>
+            <h2>遊戲說明</h2>
+            <div className="scenario-card">
+              <ul style={{ paddingLeft: '20px', lineHeight: '2' }}>
+                <li>每題有 15 秒可以思考</li>
+                <li>選擇會影響雙方的「信任值」</li>
+                <li>遊戲結束會分析你的溝通風格</li>
+                <li><b>注意：沒有真正的對錯，重點是理解對方怎麼接收到你的話。</b></li>
+              </ul>
+            </div>
+            <button className="btn btn-primary" onClick={beginPlaying}>開始模擬</button>
+            <button className="btn btn-outline" onClick={() => setGameState('home')}>返回首頁</button>
+          </div>
+        );
+      }
+
+      if (gameState === 'result') {
+        const ending = getEnding(trustScore);
+        const badOptions = history.filter(h => h.option.score < 0);
+        const tagsCount = badOptions.reduce((acc, curr) => {
+          acc[curr.option.tag] = (acc[curr.option.tag] || 0) + 1;
+          return acc;
+        }, {});
+        const topTag = Object.keys(tagsCount).sort((a,b) => tagsCount[b] - tagsCount[a])[0] || '無';
+
+        return (
+          <div className="container">
+            <h1>你的親師溝通健檢</h1>
+            <div className="scenario-card" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '10px' }}>
+                {trustScore} 分
+              </div>
+              <h2 style={{ color: 'var(--text-main)', marginBottom: '10px' }}>{ending.title}</h2>
+              <p>{ending.desc}</p>
+            </div>
+
+            <div className="scenario-card">
+              <h3 style={{ marginBottom: '12px', color: 'var(--text-main)' }}>📊 分析報告</h3>
+              {topTag !== '無' && (
+                <p style={{ marginBottom: '10px' }}>
+                  ⚠️ 最常出現的雷點：<b>{topTag}</b>
+                </p>
+              )}
+              <div style={{ padding: '15px', backgroundColor: '#FDF2E9', borderRadius: '8px', marginTop: '15px' }}>
+                <h4 style={{ marginBottom: '8px', color: '#D35400' }}>💡 一句話帶走</h4>
+                <p style={{ fontWeight: 'bold' }}>先接住情緒，再處理事情。<br/>先理解感受，再說明事實。</p>
+              </div>
+            </div>
+
+            <button className="btn btn-primary" onClick={beginPlaying}>再玩一次 ({role === 'teacher' ? '教師版' : '家長版'})</button>
+            <button className="btn btn-secondary" onClick={() => setGameState('home')}>換個角色體驗</button>
+          </div>
+        );
+      }
+
+      let trustClass = 'good';
+      if (trustScore < 60) trustClass = 'warn';
+      if (trustScore < 40) trustClass = 'danger';
+
+      return (
+        <div className="container">
+          {isDebug && (
+            <div className="debug-panel">
+              Debug | ID: {currentQ.id} | Category: {currentQ.category} | Trust: {trustScore}
+            </div>
+          )}
+
+          <div className="game-header">
+            <span>👤 {role === 'teacher' ? '林老師 (班級製作人)' : '溫爸/溫媽 (小孩經紀人)'}</span>
+            <span>題 {currentQIndex + 1} / 10</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '14px' }}>
+            <span>信任值: {trustScore}</span>
+            <span>{trustScore}/100</span>
+          </div>
+          <div className="trust-bar-container">
+            <div className={`trust-bar ${trustClass}`} style={{ width: `${trustScore}%` }}></div>
+          </div>
+
+          {!selectedOption && (
+            <div className="timer">⏱ {timeLeft}s</div>
+          )}
+
+          <div className="scenario-card">
+            <strong>{currentQ.scenario}</strong>
+          </div>
+
+          <div className="options-container">
+            {currentQ.options.map((opt, index) => (
+              <button 
+                key={index}
+                className={`btn btn-option ${selectedOption === opt ? 'selected' : ''}`}
+                onClick={() => handleOptionClick(opt)}
+                disabled={selectedOption !== null}
+              >
+                {opt.text}
+              </button>
+            ))}
+          </div>
+
+          {selectedOption && (
+            <div className="feedback-box">
+              <div style={{ fontWeight: 'bold', marginBottom: '8px', color: selectedOption.score > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                信任值變化：{selectedOption.score > 0 ? `+${selectedOption.score}` : selectedOption.score}
+              </div>
+              
+              <div className="feedback-item">
+                💭 <b>對方心理：</b>{selectedOption.reaction}
+              </div>
+
+              {selectedOption.score < 8 && (
+                <div className="feedback-item warn">
+                  <b>⚠️ 這句話可能讓對方這樣解讀...</b><br/>
+                  {currentQ.explanation}
+                </div>
+              )}
+
+              {selectedOption.score >= 8 && (
+                <div className="feedback-item better" style={{ backgroundColor: '#E8F8F5', color: '#117A65' }}>
+                  <b>✨ 良好的溝通！</b><br/>
+                  你成功接住了對方的情緒並開啟對話。
+                </div>
+              )}
+
+              {selectedOption.score < 8 && (
+                <div className="feedback-item better">
+                  <b>💡 換個說法試試：</b><br/>
+                  {currentQ.betterResponse}
+                </div>
+              )}
+
+              <button className="btn btn-primary" style={{ marginTop: '15px', marginBottom: '0' }} onClick={nextQuestion}>
+                {currentQIndex < roleQuestions.length - 1 ? '下一題' : '查看結果'}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
